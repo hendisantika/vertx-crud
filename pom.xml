@@ -19,7 +19,7 @@
     <vertx.version>4.5.11</vertx.version>
     <junit-jupiter.version>5.9.1</junit-jupiter.version>
 
-    <main.verticle>id.my.hendisantika.vertx_crud.MainVerticle</main.verticle>
+    <main.verticle>id.my.hendisantika.vertx_crud.App</main.verticle>
     <launcher.class>io.vertx.core.Launcher</launcher.class>
   </properties>
 
@@ -40,7 +40,51 @@
       <groupId>io.vertx</groupId>
       <artifactId>vertx-core</artifactId>
     </dependency>
+    <!-- https://mvnrepository.com/artifact/io.vertx/vertx-web-client -->
+    <dependency>
+      <groupId>io.vertx</groupId>
+      <artifactId>vertx-web-client</artifactId>
+      <version>4.5.8</version>
+    </dependency>
+    <dependency>
+      <groupId>io.vertx</groupId>
+      <artifactId>vertx-sql-client</artifactId>
+      <version>4.5.8</version>
+    </dependency>
+    <!-- Vert.x MySQL Client -->
+    <dependency>
+      <groupId>io.vertx</groupId>
+      <artifactId>vertx-mysql-client</artifactId>
+      <version>4.5.8</version>
+    </dependency>
+    <!-- MySQL Connector Java -->
+    <dependency>
+      <groupId>mysql</groupId>
+      <artifactId>mysql-connector-java</artifactId>
+      <version>8.0.33</version>
+    </dependency>
+    <dependency>
+      <groupId>ch.qos.logback</groupId>
+      <artifactId>logback-classic</artifactId>
+      <version>1.2.11</version>
+    </dependency>
 
+    <!-- Vert.x SQL Client -->
+
+
+    <!-- Vert.x JDBC Client -->
+    <dependency>
+      <groupId>io.vertx</groupId>
+      <artifactId>vertx-jdbc-client</artifactId>
+      <version>4.5.8</version>
+    </dependency>
+
+    <!-- MySQL JDBC Driver -->
+    <dependency>
+      <groupId>mysql</groupId>
+      <artifactId>mysql-connector-java</artifactId>
+      <version>8.0.28</version>
+    </dependency>
     <dependency>
       <groupId>io.vertx</groupId>
       <artifactId>vertx-junit5</artifactId>

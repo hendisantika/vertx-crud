@@ -202,6 +202,12 @@ public class App extends AbstractVerticle {
         ctx.fail(500);
       }
     });
+
+    @Override
+    public void stop () {
+      // Close the database client when stopping the verticle
+      client.close();
+    }
   }
 
 

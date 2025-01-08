@@ -61,4 +61,34 @@ public class App extends AbstractVerticle {
       }
     });
   }
+
+  private void handleGetByIdResource(RoutingContext ctx) {
+    String username = ctx.request().getParam("username");
+
+    // Check if username parameter is provided
+
+
+    // Prepare SQL query with parameter
+    String sql = "SELECT * FROM usert WHERE username = ?";
+    JsonArray params = new JsonArray().add(username);
+
+    // Execute the SQL query
+    client.queryWithParams(sql, params, res -> {
+      if (res.succeeded()) {
+        // Retrieve the query result
+        if (res.result().getNumRows() > 0) {
+          JsonObject user = res.result().getRows().get(0);
+          ctx.response()
+            .putHeader("content-type", "application/json")
+            .end(user.encode());
+        } else {
+          // Handle case where no user is found with the given username
+          ctx.response().setStatusCode(404).end("User not found");
+        }
+      } else {
+        // Handle query execution failure
+        ctx.fail(500);
+      }
+    });
+  }
 }

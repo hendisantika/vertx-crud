@@ -120,4 +120,35 @@ public class App extends AbstractVerticle {
       }
     });
   }
+
+  // Handler for POST /api/resource
+  // Handler for POST /users
+  private void handlePostResource(RoutingContext ctx) {
+    JsonObject body = ctx.getBodyAsJson();
+
+    // Logging to inspect the JSON body
+    System.out.println("Received JSON body: " + body.encodePrettily());
+
+    // Extract data from the JSON body
+    String username = body.getString("username");
+    String email = body.getString("email");
+
+    // Validate incoming data
+    if (username == null || username.isEmpty() || email == null || email.isEmpty()) {
+      ctx.response().setStatusCode(400).end("Username and email are required");
+      return;
+    }
+
+    // Prepare parameters for the SQL query
+    JsonArray params = new JsonArray().add(username).add(email);
+
+    // Execute the SQL INSERT query
+    client.updateWithParams("INSERT INTO usert (username, email) VALUES (?, ?)", params, res -> {
+      if (res.succeeded()) {
+        ctx.response().setStatusCode(201).end("Username created ");
+      } else {
+        ctx.fail(500);
+      }
+    });
+  }
 }

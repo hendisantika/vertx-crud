@@ -48,4 +48,17 @@ public class App extends AbstractVerticle {
         }
       });
   }
+
+  // Handler for GET /api/resource
+  private void handleGetResource(RoutingContext ctx) {
+    client.query("SELECT * FROM usert", res -> {
+      if (res.succeeded()) {
+        ctx.response()
+          .putHeader("content-type", "application/json")
+          .end(res.result().toJson().encode());
+      } else {
+        ctx.fail(500);
+      }
+    });
+  }
 }

@@ -91,4 +91,33 @@ public class App extends AbstractVerticle {
       }
     });
   }
+
+
+  private void handleDeleteByIdResource(RoutingContext ctx) {
+    String username = ctx.request().getParam("username");
+
+    // Check if username parameter is provided
+    if (username == null || username.isEmpty()) {
+      ctx.response().setStatusCode(400).end("Username parameter is required");
+      return;
+    }
+
+    // Prepare SQL query with parameter
+    String sql = "DELETE FROM usert WHERE username = ?";
+    JsonArray params = new JsonArray().add(username);
+
+    // Execute the SQL DELETE query
+    client.updateWithParams(sql, params, res -> {
+      if (res.succeeded()) {
+        if (res.result().getUpdated() > 0) {
+          ctx.response().setStatusCode(200).end("User deleted successfully");
+        } else {
+          ctx.response().setStatusCode(404).end("User not found");
+        }
+      } else {
+        // Handle query execution failure
+        ctx.fail(500);
+      }
+    });
+  }
 }

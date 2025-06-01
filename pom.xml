@@ -17,7 +17,7 @@
     <exec-maven-plugin.version>3.5.1</exec-maven-plugin.version>
 
     <vertx.version>5.0.0</vertx.version>
-    <junit-jupiter.version>5.12.2</junit-jupiter.version>
+    <junit-jupiter.version>5.13.0</junit-jupiter.version>
 
     <main.verticle>id.my.hendisantika.vertx_crud.App</main.verticle>
     <launcher.class>io.vertx.core.Launcher</launcher.class>

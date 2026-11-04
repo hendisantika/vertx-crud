@@ -1,13 +1,64 @@
 version: 2
 updates:
+  # Maven dependencies & plugins
   - package-ecosystem: maven
     directory: "/"
     schedule:
-      interval: daily
-      time: '05:00'
+      interval: weekly
+      day: monday
+      time: "05:00"
       timezone: Asia/Jakarta
     open-pull-requests-limit: 10
-  - package-ecosystem: "github-actions"
+    target-branch: main
+    assignees:
+      - hendisantika
+    labels:
+      - dependencies
+      - maven
+    commit-message:
+      prefix: "build(deps)"
+      prefix-development: "build(deps-dev)"
+      include: scope
+    groups:
+      vertx:
+        patterns:
+          - "io.vertx:*"
+      maven-plugins:
+        patterns:
+          - "org.apache.maven.plugins:*"
+          - "org.codehaus.mojo:*"
+      test-dependencies:
+        dependency-type: development
+        patterns:
+          - "org.junit*"
+      logging:
+        patterns:
+          - "ch.qos.logback:*"
+          - "org.slf4j:*"
+    ignore:
+      # Major Vert.x upgrades require code migration; review them manually
+      - dependency-name: "io.vertx:*"
+        update-types: [ "version-update:semver-major" ]
+
+  # GitHub Actions used in workflows
+  - package-ecosystem: github-actions
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: Asia/Jakarta
+    open-pull-requests-limit: 5
+    target-branch: main
+    assignees:
+      - hendisantika
+    labels:
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: "ci(deps)"
+      include: scope
+    groups:
+      github-actions:
+        patterns:
+          - "*"

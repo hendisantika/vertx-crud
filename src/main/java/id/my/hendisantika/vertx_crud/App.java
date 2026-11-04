@@ -1,14 +1,18 @@
 package id.my.hendisantika.vertx_crud;
 
-import io.vertx.core.AbstractVerticle;
-import io.vertx.core.Promise;
+import io.vertx.core.Future;
+import io.vertx.core.VerticleBase;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
-import io.vertx.ext.jdbc.JDBCClient;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 import io.vertx.ext.web.handler.BodyHandler;
+import io.vertx.mysqlclient.MySQLBuilder;
+import io.vertx.mysqlclient.MySQLConnectOptions;
+import io.vertx.sqlclient.Pool;
+import io.vertx.sqlclient.PoolOptions;
+import io.vertx.sqlclient.Tuple;
 
 /**
  * Created by IntelliJ IDEA.
@@ -24,22 +28,32 @@ public class App {
 
   public static void main(String[] args) {
     Vertx vertx = Vertx.vertx();
-    vertx.deployVerticle(new MyVerticle());
+    vertx.deployVerticle(new MyVerticle())
+      .onFailure(err -> {
+        System.out.println("Deployment failed: " + err);
+        vertx.close();
+      });
   }
 
-  public static class MyVerticle extends AbstractVerticle {
+  public static class MyVerticle extends VerticleBase {
 
-    private JDBCClient client;
+    private Pool client;
 
     @Override
-    public void start(Promise<Void> startPromise) {
-      // Configure MySQL connection
-      client = JDBCClient.create(vertx, new JsonObject()
-        .put("url", "jdbc:mysql://localhost:3306/testdb")
-        .put("driver_class", "com.mysql.cj.jdbc.Driver")
-        .put("user", "root")
-        .put("password", "root")
-        .put("max_pool_size", 30));
+    public Future<?> start() {
+      // Configure MySQL connection (reactive client, connections are created lazily)
+      MySQLConnectOptions connectOptions = new MySQLConnectOptions()
+        .setHost(env("DB_HOST", "localhost"))
+        .setPort(Integer.parseInt(env("DB_PORT", "3306")))
+        .setDatabase(env("DB_NAME", "testdb"))
+        .setUser(env("DB_USER", "root"))
+        .setPassword(env("DB_PASSWORD", "root"));
+
+      client = MySQLBuilder.pool()
+        .with(new PoolOptions().setMaxSize(30))
+        .connectingTo(connectOptions)
+        .using(vertx)
+        .build();
 
       // Create a router object
       Router router = Router.router(vertx);
@@ -47,187 +61,153 @@ public class App {
       // Enable parsing of request bodies
       router.route().handler(BodyHandler.create());
 
-      // Define GET endpoint
       router.get("/users").handler(this::handleGetResource);
       router.get("/users/:username").handler(this::handleGetByIdResource);
-      // Define POST endpoint
       router.post("/users").handler(this::handlePostResource);
-
       router.delete("/users/:username").handler(this::handleDeleteByIdResource);
       router.put("/users/:username").handler(this::handleUpdateResource);
 
-
       // Start the HTTP server
-      vertx.createHttpServer()
+      return vertx.createHttpServer()
         .requestHandler(router)
-        .listen(8080, ar -> {
-          if (ar.succeeded()) {
-            System.out.println("Server started on port 8080");
-            startPromise.complete();
-          } else {
-            System.out.println("Server start failed: " + ar.cause());
-            startPromise.fail(ar.cause());
-          }
-        });
+        .listen(Integer.parseInt(env("HTTP_PORT", "8080")))
+        .onSuccess(server -> System.out.println("Server started on port " + server.actualPort()))
+        .onFailure(err -> System.out.println("Server start failed: " + err));
     }
 
-    // Handler for GET /api/resource
+    private static String env(String key, String defaultValue) {
+      String value = System.getenv(key);
+      return value == null || value.isBlank() ? defaultValue : value;
+    }
+
+    // Handler for GET /users
     private void handleGetResource(RoutingContext ctx) {
-      client.query("SELECT * FROM usert", res -> {
-        if (res.succeeded()) {
+      client.query("SELECT * FROM usert")
+        .execute()
+        .onSuccess(rows -> {
+          JsonArray result = new JsonArray();
+          rows.forEach(row -> result.add(row.toJson()));
           ctx.response()
             .putHeader("content-type", "application/json")
-            .end(res.result().toJson().encode());
-        } else {
-          ctx.fail(500);
-        }
-      });
+            .end(result.encode());
+        })
+        .onFailure(ctx::fail);
     }
 
-
+    // Handler for GET /users/:username
     private void handleGetByIdResource(RoutingContext ctx) {
-      String username = ctx.request().getParam("username");
+      String username = ctx.pathParam("username");
 
-      // Check if username parameter is provided
-      // Prepare SQL query with parameter
-      String sql = "SELECT * FROM usert WHERE username = ?";
-      JsonArray params = new JsonArray().add(username);
-
-      // Execute the SQL query
-      client.queryWithParams(sql, params, res -> {
-        if (res.succeeded()) {
-          // Retrieve the query result
-          if (res.result().getNumRows() > 0) {
-            JsonObject user = res.result().getRows().get(0);
+      client.preparedQuery("SELECT * FROM usert WHERE username = ?")
+        .execute(Tuple.of(username))
+        .onSuccess(rows -> {
+          if (rows.size() > 0) {
             ctx.response()
               .putHeader("content-type", "application/json")
-              .end(user.encode());
+              .end(rows.iterator().next().toJson().encode());
           } else {
-            // Handle case where no user is found with the given username
             ctx.response().setStatusCode(404).end("User not found");
           }
-        } else {
-          // Handle query execution failure
-          ctx.fail(500);
-        }
-      });
+        })
+        .onFailure(ctx::fail);
     }
 
+    // Handler for DELETE /users/:username
     private void handleDeleteByIdResource(RoutingContext ctx) {
-      String username = ctx.request().getParam("username");
+      String username = ctx.pathParam("username");
 
-      // Check if username parameter is provided
       if (username == null || username.isEmpty()) {
         ctx.response().setStatusCode(400).end("Username parameter is required");
         return;
       }
 
-      // Prepare SQL query with parameter
-      String sql = "DELETE FROM usert WHERE username = ?";
-      JsonArray params = new JsonArray().add(username);
-
-      // Execute the SQL DELETE query
-      client.updateWithParams(sql, params, res -> {
-        if (res.succeeded()) {
-          if (res.result().getUpdated() > 0) {
+      client.preparedQuery("DELETE FROM usert WHERE username = ?")
+        .execute(Tuple.of(username))
+        .onSuccess(rows -> {
+          if (rows.rowCount() > 0) {
             ctx.response().setStatusCode(200).end("User deleted successfully");
           } else {
             ctx.response().setStatusCode(404).end("User not found");
           }
-        } else {
-          // Handle query execution failure
-          ctx.fail(500);
-        }
-      });
+        })
+        .onFailure(ctx::fail);
     }
 
-    // Handler for POST /api/resource
     // Handler for POST /users
     private void handlePostResource(RoutingContext ctx) {
-      JsonObject body = ctx.getBodyAsJson();
+      JsonObject body = ctx.body().asJsonObject();
 
-      // Logging to inspect the JSON body
+      if (body == null) {
+        ctx.response().setStatusCode(400).end("JSON body is required");
+        return;
+      }
+
       System.out.println("Received JSON body: " + body.encodePrettily());
 
-      // Extract data from the JSON body
       String username = body.getString("username");
       String email = body.getString("email");
 
-      // Validate incoming data
       if (username == null || username.isEmpty() || email == null || email.isEmpty()) {
         ctx.response().setStatusCode(400).end("Username and email are required");
         return;
       }
 
-      // Prepare parameters for the SQL query
-      JsonArray params = new JsonArray().add(username).add(email);
-
-      // Execute the SQL INSERT query
-      client.updateWithParams("INSERT INTO usert (username, email) VALUES (?, ?)", params, res -> {
-        if (res.succeeded()) {
-          ctx.response().setStatusCode(201).end("Username created ");
-        } else {
-          ctx.fail(500);
-        }
-      });
+      client.preparedQuery("INSERT INTO usert (username, email) VALUES (?, ?)")
+        .execute(Tuple.of(username, email))
+        .onSuccess(rows -> ctx.response().setStatusCode(201).end("Username created"))
+        .onFailure(ctx::fail);
     }
 
+    // Handler for PUT /users/:username
     private void handleUpdateResource(RoutingContext ctx) {
-      JsonObject body = ctx.getBodyAsJson();
+      JsonObject body = ctx.body().asJsonObject();
 
-      // Logging to inspect the JSON body
+      if (body == null) {
+        ctx.response().setStatusCode(400).end("JSON body is required");
+        return;
+      }
+
       System.out.println("Received JSON body: " + body.encodePrettily());
 
-      // Extract the username from the URL parameter
-      String username = ctx.request().getParam("username");
+      String username = ctx.pathParam("username");
 
-      // Initialize the SQL update query
-      StringBuilder sql = new StringBuilder("UPDATE userT SET ");
-      JsonArray params = new JsonArray();
+      StringBuilder sql = new StringBuilder("UPDATE usert SET ");
+      Tuple params = Tuple.tuple();
       boolean first = true;
 
       // Dynamically add fields to be updated
       if (body.containsKey("email")) {
         if (!first) sql.append(", ");
         sql.append("email = ?");
-        params.add(body.getString("email"));
+        params.addString(body.getString("email"));
         first = false;
       }
 
-      // Add more fields as necessary in a similar manner
-      // Example:
-
       // Ensure at least one field is being updated
-      if (params.isEmpty()) {
+      if (params.size() == 0) {
         ctx.response().setStatusCode(400).end("No fields to update");
         return;
       }
 
-      // Append the WHERE clause
       sql.append(" WHERE username = ?");
-      params.add(username);
+      params.addString(username);
 
-      System.out.println(sql);
-
-      // Execute the SQL update query
-      client.updateWithParams(sql.toString(), params, res -> {
-        if (res.succeeded()) {
-          if (res.result().getUpdated() == 0) {
-            // Handle case where no user is found with the given username
+      client.preparedQuery(sql.toString())
+        .execute(params)
+        .onSuccess(rows -> {
+          if (rows.rowCount() == 0) {
             ctx.response().setStatusCode(404).end("User not found");
           } else {
             ctx.response().setStatusCode(200).end("User updated successfully");
           }
-        } else {
-          ctx.fail(500);
-        }
-      });
+        })
+        .onFailure(ctx::fail);
     }
 
     @Override
-    public void stop() {
+    public Future<?> stop() {
       // Close the database client when stopping the verticle
-      client.close();
+      return client != null ? client.close() : Future.succeededFuture();
     }
   }
 }
